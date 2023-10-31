@@ -367,7 +367,7 @@ if __name__ == "__main__":
             z = batch[1]
             z = z.to("cuda:0")
 
-            y_p = self_atten(x, y, visualization=False)
+            y_p = self_atten(x, y)
             l = loss(y_p.permute(0,2,1), z)
             l.backward()
             optimizer.step()
@@ -392,7 +392,7 @@ if __name__ == "__main__":
         x, y = batch[0].view((-1, sequence_length_enc)), batch[1].view((-1, sequence_length))
         z = torch.zeros((-1, sequence_length, uniques))
         z[:, :, batch[2].view((-1, sequence_length, 1))[:, :]] = 1
-        y_p = self_atten(x, y, visualization=False)
+        y_p = self_atten(x, y)
         y_p = y_p.to("cpu")
         # print(y, words[y_p.argmax()])
         accuracy += torch.eq(z.argmax(dim=1), y_p.argmax(dim=1)).sum().item() / batch[0].shape[0]
@@ -406,6 +406,6 @@ if __name__ == "__main__":
     x = torch.Tensor(dataset[128][0]).unsqueeze(0)
     y = torch.Tensor(dataset[128][1]).unsqueeze(0)
 
-    self_atten(x, y, visualization=True)
+    self_atten(x, y)
     # x = torch.Tensor(dataset[129][0]).unsqueeze(0)
     # self_atten(x, visualization=True)
