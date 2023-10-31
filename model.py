@@ -16,7 +16,7 @@ sequence_length = 150  # for example, predicting 10th word based on previous 9 w
 class BeowulfDataset(Dataset):
     def __init__(self, file_path: str, sequence_length: int, sequence_length_enc: int, picklefile=None):
         # Read the text file
-        text = pandas.read_csv("./gutenberg-poetry-dataset.csv")
+        text = pandas.read_csv(file_path)
         text = text[["title", "content"]]
         text = text.dropna()
         # Remove non-alphanumeric characters and tokenize
@@ -130,7 +130,7 @@ class self_attention_pure(nn.Module):
         x = x.reshape(x.shape[0], -1, self.num_dims)
         x = self.preoutput_0(x)
         x = self.preoutput_1(x)
-        x += id
+        x = x + id
         x = self.gelu(x)
 
         return x
@@ -158,7 +158,7 @@ class self_attention_w_pos_enc(nn.Module):
     def forward(self, x, device: torch.device =torch.device("cuda:0")):
         x = x.to(device)
         x = self.embedding(x)
-        x += self.pos_encoding
+        x = x + self.pos_encoding
         x = self.attention(x)
         x = self.output(x)
 
@@ -188,7 +188,7 @@ class self_attention_w_pos_enc_pure(nn.Module):
 
         x = x.to(self.device)
         x = self.embedding(x)
-        x += pos_encoding
+        x = x+ pos_encoding
         x = self.attention(x, mask=mask)
         return x
 
@@ -259,7 +259,7 @@ class self_attention_pure_encoder_qk_decoder_v(nn.Module):
         x = x.reshape(x.shape[0], -1, self.num_dims)
         x = self.preoutput_0(x)
         x = self.preoutput_1(x)
-        x += id
+        x = x + id
         x = self.gelu(x)
 
         return x
@@ -364,7 +364,7 @@ if __name__ == "__main__":
         for i, batch in enumerate(dataloader):
             optimizer.zero_grad()
             x, y = batch[0].view((-1, sequence_length_enc)), batch[1].view((-1, sequence_length))
-            z = batch[1]
+            z = batch[2]
             z = z.to("cuda:0")
 
             y_p = self_atten(x, y)
