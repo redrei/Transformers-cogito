@@ -50,10 +50,12 @@ class BeowulfDataset(Dataset):
                                    max_length=self.sequence_length)["input_ids"].squeeze()
                 if y is None or len(y) == 0:
                     continue
-                for i in range(0, len(y)-sequence_length, 70):
+                #z = y[:sequence_length].clone()
+                #y = y[:sequence_length-1].clone()
+                for i in range(0, len(y)-sequence_length, 200):
                     y_z = y[i:i+sequence_length].clone()
                     z = y_z.clone()
-                    y_z = torch.cat((torch.tensor(self.tokenizer.pad_token_id).view(1), y_z[1:]))
+                    y_z = torch.cat((torch.tensor(self.tokenizer.pad_token_id).view(1), y_z[:-1]))
                     self.threes.append((x,y_z,z))
             # with open("./threes.pickle", "wb") as f:
             # pickle.dump(self.threes, f)
@@ -326,13 +328,12 @@ class multi_layer_self_attention_encoder_decoder_scheme(nn.Module):
 
 
 if __name__ == "__main__":
-    self_atten = multi_layer_self_attention_encoder_decoder_scheme(seq_length=10, dims=256, num_heads=8)
-    sa = torch.jit.script(self_atten)
+
 
     file_path = 'gutenberg-poetry-dataset.csv'
-    batch_size = 64
+    batch_size = 32
     shuffle = True
-    sequence_length = 150  # for example, predicting 10th word based on previous 9 words
+    sequence_length = 250  # for example, predicting 10th word based on previous 9 words
     sequence_length_enc = 25
     torch.backends.cuda.sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True)
 
@@ -347,17 +348,16 @@ if __name__ == "__main__":
     print(uniques)
 
     seq_length = sequence_length
-    self_atten = multi_layer_self_attention_encoder_decoder_scheme(seq_length=seq_length, dims=256, num_heads=8,
-                                                                   outs=[256, 128, 128, uniques], emb_size=uniques,
-                                                                   dropout=0.4)
+    self_atten = multi_layer_self_attention_encoder_decoder_scheme(seq_length=seq_length, dims=256, num_heads=16,
+                                                                   outs=[256, 256, 256, uniques], emb_size=uniques,
+                                                                   dropout=0.2)
     # p = self_atten(numdata[:12])
 
-    optimizer = torch.optim.Adam(self_atten.parameters(), lr=0.001, weight_decay=0.005)
+    optimizer = torch.optim.AdamW(self_atten.parameters(), lr=0.001, weight_decay=0.15)
     loss = nn.CrossEntropyLoss()
     schedule = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=1, cooldown=3, factor=0.2)
-    sa = torch.jit.script(self_atten)
 
-    for k in range(50):
+    for k in range(250):
         loss_n = 0
         acc = 0
         best = 1000
@@ -378,7 +378,7 @@ if __name__ == "__main__":
         if loss_n < best:
             best = loss_n
             sa = torch.jit.script(self_atten)
-            torch.jit.save(sa, "model.pt")
+            torch.jit.save(sa, "model-gt.pt")
         acc /= len(dataloader)
         schedule.step(loss_n)
         print("epoch:", k, "loss:", loss_n, "acc:", acc)
@@ -390,12 +390,12 @@ if __name__ == "__main__":
     accuracy = 0
     for i, batch in enumerate(dataloader):
         x, y = batch[0].view((-1, sequence_length_enc)), batch[1].view((-1, sequence_length))
-        z = torch.zeros((-1, sequence_length, uniques))
-        z[:, :, batch[2].view((-1, sequence_length, 1))[:, :]] = 1
+        z = batch[2]
+        z = z.to("cuda:0")
         y_p = self_atten(x, y)
-        y_p = y_p.to("cpu")
+        y_p = y_p.to("cuda:0")
         # print(y, words[y_p.argmax()])
-        accuracy += torch.eq(z.argmax(dim=1), y_p.argmax(dim=1)).sum().item() / batch[0].shape[0]
+        accuracy += torch.eq(z, y_p.argmax(dim=2)).sum().item() / (batch[0].shape[0] * sequence_length)
 
     accuracy /= len(dataloader) - seq_length - 1
     print("accuracy:", accuracy)
